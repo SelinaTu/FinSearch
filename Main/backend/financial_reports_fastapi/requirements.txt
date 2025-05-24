@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+langchain
+langchain-openai
+sentence-transformers
+requests # Added for news_and_fx.py
+python-dotenv # Added for news_and_fx.py (and other .env loading)
+matplotlib # Added for chart_generator/charting.py
+wandb # Added for Weights & Biases integration

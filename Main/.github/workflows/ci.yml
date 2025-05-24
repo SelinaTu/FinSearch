@@ -1,0 +1,131 @@
+# Workflow name displayed on GitHub Actions UI
+name: Backend CI
+
+# --- Workflow Triggers ---
+# This workflow runs on:
+# 1. Pushes to 'main' or 'develop' branches.
+# 2. Pull requests targeting 'main' or 'develop' branches.
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+# --- Jobs Definition ---
+# Defines a single job named 'lint-and-build'.
+# Jobs run in parallel by default unless dependencies are specified.
+jobs:
+  lint-and-build:
+    # Runner: Specifies the type of machine to run the job on.
+    # 'ubuntu-latest' uses the latest version of an Ubuntu Linux runner.
+    runs-on: ubuntu-latest
+
+    # Default settings for steps within this job.
+    defaults:
+      run:
+        # Sets the default working directory for all 'run' steps in this job.
+        # All commands will be executed from 'Main/backend/' relative to the repository root.
+        working-directory: Main/backend
+
+    # Sequence of steps to execute in this job.
+    steps:
+    # Step 1: Check out repository code
+    # Uses a pre-built action 'actions/checkout@v3' to fetch the repository code
+    # into the runner environment.
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    # Step 2: Set up Python environment
+    # Uses a pre-built action 'actions/setup-python@v3' to install a specified Python version.
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        # Specifies the Python version to use, matching the version in Dockerfiles for consistency.
+        python-version: '3.10'
+
+    # Step 3: Install Python dependencies
+    # This step installs dependencies required for linting and running tests directly in the runner,
+    # as well as dependencies for both Django and FastAPI applications.
+    - name: Install dependencies for Django app & linters
+      run: |
+        # Upgrade pip to the latest version.
+        python -m pip install --upgrade pip
+        # Install Flake8 for linting.
+        pip install flake8
+        
+        # Install dependencies for the Django application and shared modules.
+        # 'requirements.txt' is located in 'Main/backend/' (the working directory).
+        pip install -r requirements.txt 
+        
+        # Install dependencies for the FastAPI application.
+        # 'financial_reports_fastapi/requirements.txt' is relative to 'Main/backend/'.
+        pip install -r financial_reports_fastapi/requirements.txt
+
+    # Step 4: Lint code with Flake8
+    # Runs Flake8 to check for Python code style issues, syntax errors, and undefined names.
+    - name: Lint with Flake8
+      run: |
+        # Command breakdown:
+        # 'flake8 .': Run Flake8 on all files in the current directory (Main/backend/).
+        # '--count': Show total counts of errors and warnings.
+        # '--select=E9,F63,F7,F82': Only report specific error codes (syntax errors, undefined names).
+        # '--show-source': Show the source code line for each violation.
+        # '--statistics': Show statistics about occurrences of each error/warning code.
+        # This configuration makes Flake8 act as a basic syntax/undefined name checker, failing the build on such errors.
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        
+        # Alternative Flake8 command (commented out):
+        # For a less strict check that doesn't fail the build on style errors but still reports them:
+        # flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # '--exit-zero': Flake8 always exits with 0, even if errors are found (treats them as warnings).
+        # '--max-complexity=10', '--max-line-length=127': Example style checks.
+
+    # Step 5: Run Unit Tests for Data Providers module
+    # 'python -m unittest discover': Standard Python command to discover and run tests.
+    # '-s data_providers/tests': Specifies the start directory for test discovery (relative to Main/backend/).
+    # '-p "test_*.py"': Pattern for matching test file names.
+    - name: Run Unit Tests for Data Providers
+      run: python -m unittest discover -s data_providers/tests -p 'test_*.py'
+
+    # Step 6: Run Unit Tests for Chart Generator module
+    - name: Run Unit Tests for Chart Generator
+      run: python -m unittest discover -s chart_generator/tests -p 'test_*.py'
+
+    # Step 7: Run Unit Tests for FastAPI Service
+    - name: Run Unit Tests for FastAPI Service
+      run: python -m unittest discover -s financial_reports_fastapi/tests -p 'test_*.py'
+
+    # Step 8: Run Django App Tests
+    # Executes Django's test runner for the 'chat_server_app'.
+    - name: Run Django App Tests
+      env:
+        # Sets the DJANGO_SETTINGS_MODULE environment variable for this step.
+        # This tells 'manage.py' which Django settings file to use.
+        # Adjust 'chat_server.settings' if your project's settings module is named differently
+        # or located elsewhere relative to 'Main/backend/'.
+        DJANGO_SETTINGS_MODULE: chat_server.settings 
+      run: python manage.py test chat_server_app
+      # 'chat_server_app' is the name of the Django app whose tests should be run.
+      # 'manage.py' is expected to be in 'Main/backend/'.
+
+    # Step 9: Build Django Docker image
+    # This step validates that the Django Dockerfile can be built successfully.
+    - name: Build Django Docker image
+      run: |
+        # 'docker build': Command to build a Docker image.
+        # '-f Dockerfile.django': Specifies the Dockerfile to use (located in Main/backend/).
+        # '-t django-app-test': Tags the built image with the name 'django-app-test'.
+        # '.': Specifies the build context (the current working directory, Main/backend/).
+        #    This means Docker can access all files in Main/backend/ for COPY instructions.
+        docker build -f Dockerfile.django -t django-app-test .
+
+    # Step 10: Build FastAPI Docker image
+    # Validates the FastAPI Dockerfile.
+    - name: Build FastAPI Docker image
+      run: |
+        # '-f financial_reports_fastapi/Dockerfile.fastapi': Specifies the Dockerfile
+        #    located in 'Main/backend/financial_reports_fastapi/'.
+        # '.': The build context is still 'Main/backend/'. This is important because
+        #    Dockerfile.fastapi copies shared modules from the 'Main/backend/' level
+        #    (e.g., COPY ./chart_generator /app/chart_generator/).
+        docker build -f financial_reports_fastapi/Dockerfile.fastapi -t fastapi-app-test .

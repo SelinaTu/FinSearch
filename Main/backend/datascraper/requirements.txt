@@ -1,0 +1,10 @@
+sentence-transformers
+faiss-cpu # Added as create_embeddings.py and cdm_rag.py use faiss
+numpy # Added as create_embeddings.py and cdm_rag.py use numpy
+python-dotenv # Added as .env is loaded in multiple scripts here
+requests # Added as datascraper.py uses it
+beautifulsoup4 # Added as datascraper.py uses it
+googlesearch-python # Added as datascraper.py uses it
+openai # Still needed for LLM calls in datascraper.py and cdm_rag.py's generate_answer
+markdown # For cdm_rag.py (potentially) or other text processing.
+# Add other common datascraper dependencies if known, otherwise keep minimal.
