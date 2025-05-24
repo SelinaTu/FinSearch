@@ -1,4 +1,4 @@
-# Project Title (User to define - consider suggesting "Financial Intelligence Platform")
+# Financial Intelligence Platform
 
 This project provides a suite of backend services for financial analysis, reporting, and chat interaction, incorporating Large Language Models (LLMs), Retrieval-Augmented Generation (RAG), real-time data fetching, and MLOps practices.
 
