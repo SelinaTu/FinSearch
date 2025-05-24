@@ -1,0 +1,96 @@
+# --- Base Image ---
+# Use an official Python 3.10 slim-buster image as the base.
+# 'slim' variants are smaller, good for production if they contain all necessary OS packages.
+# 'buster' refers to the Debian version.
+FROM python:3.10-slim
+
+# --- Environment Variables ---
+# PYTHONDONTWRITEBYTECODE: Prevents Python from writing .pyc files to disc.
+#                          This is often useful in containerized environments to save space
+#                          and avoid potential issues with outdated bytecode.
+ENV PYTHONDONTWRITEBYTECODE 1
+# PYTHONUNBUFFERED: Ensures Python output (e.g., print statements, logs) is sent directly
+#                   to the terminal without being buffered. This is crucial for seeing logs
+#                   in real-time from Docker containers.
+ENV PYTHONUNBUFFERED 1
+
+# --- Working Directory ---
+# Set the working directory inside the container to /app.
+# All subsequent commands (COPY, RUN, CMD) will be executed relative to this directory.
+WORKDIR /app
+
+# --- System Dependencies (Optional) ---
+# If your Python packages have underlying system dependencies (e.g., for image processing,
+# database connectors like psycopg2 which needs libpq-dev), install them here.
+# Example:
+# RUN apt-get update && \
+#     apt-get install -y --no-install-recommends gcc libpq-dev && \
+#     rm -rf /var/lib/apt/lists/*
+# For this project, current Python dependencies might not need extra system libs beyond what's in python:3.10-slim.
+
+# --- Install Python Dependencies ---
+# Copy the consolidated requirements file for the Django backend first.
+# This allows Docker to cache this layer if requirements.txt hasn't changed,
+# speeding up subsequent builds if only code changes.
+COPY requirements.txt /app/
+
+# Install Python dependencies specified in requirements.txt.
+# --no-cache-dir: Disables the pip cache, reducing image size.
+# -r requirements.txt: Specifies the requirements file.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Copy Application Code ---
+# Copy the entire content of the current directory (the build context, expected to be 'Main/backend/')
+# into the /app directory in the container.
+# This includes the Django project ('chat_server/'), the Django app ('chat_server_app/'),
+# shared modules ('datascraper/', 'data_providers/', 'chart_generator/'), 'manage.py', etc.
+COPY . /app/
+
+# --- Collect Static Files (Django - Optional for Production) ---
+# For a production Django deployment, static files (CSS, JS, images used by Django templates)
+# typically need to be collected into a single directory specified by STATIC_ROOT in settings.py.
+# The 'collectstatic' management command handles this.
+# This step is often done here or as part of a multi-stage Docker build.
+#
+# Requirements for collectstatic to run correctly:
+# 1. DJANGO_SETTINGS_MODULE environment variable might need to be explicitly set if not already.
+#    (e.g., ENV DJANGO_SETTINGS_MODULE=chat_server.settings)
+# 2. Ensure `STATIC_ROOT` is defined in your Django settings file (e.g., `chat_server/settings.py`).
+# 3. Any necessary static file finders and storage backends are configured.
+#
+# Example (uncomment and adjust if needed):
+# ENV DJANGO_SETTINGS_MODULE=chat_server.settings # Ensure this points to your project's settings
+# RUN python manage.py collectstatic --noinput --clear
+# '--noinput' prevents interactive prompts.
+# '--clear' clears existing files in STATIC_ROOT before collecting.
+#
+# For now, this step is commented out. If your Django app serves its own static files
+# directly via Whitenoise (common for simpler setups) or if static files are handled
+# by a separate web server (like Nginx) in production, this step might be different or unnecessary.
+
+# --- Expose Port ---
+# Inform Docker that the container listens on port 8000 at runtime.
+# This does not actually publish the port; `docker run -p <host_port>:<container_port>` does that.
+EXPOSE 8000
+
+# --- Command to Run the Application ---
+# Specifies the default command to execute when the container starts.
+# Uses Gunicorn, a Python WSGI HTTP Server for UNIX, to run the Django application.
+# Gunicorn was added to backend/requirements.txt.
+#
+# "gunicorn": The Gunicorn executable.
+# "--bind", "0.0.0.0:8000": Tells Gunicorn to listen on all network interfaces within the container
+#                           on port 8000 (the port EXPOSEd above).
+# "chat_server.wsgi:application": Points to the WSGI application object.
+#   - 'chat_server' should be the name of your Django project directory (where wsgi.py is located).
+#   - 'wsgi' refers to the wsgi.py file.
+#   - 'application' is the WSGI callable object within wsgi.py.
+#   Adjust this path if your Django project or WSGI application object is named differently.
+#   For example, if your project is `myproject`, it would be `myproject.wsgi:application`.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "chat_server.wsgi:application"]
+
+# --- Build Context Note ---
+# This Dockerfile assumes the Docker build command is run from the 'Main/backend/' directory.
+# For example: `docker build -f Dockerfile.django -t django_service .` (executed from `Main/backend/`)
+# The `.` at the end of the build command specifies the current directory as the build context.
+# This context is important for the `COPY . /app/` command to correctly copy all necessary backend files.

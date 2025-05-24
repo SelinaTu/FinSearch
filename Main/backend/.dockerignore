@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env # Typically .env files are not committed and not included in Docker images
+# Secrets should be passed via build arguments or runtime environment variables.
+.git
+.gitignore
+*.log
+db.sqlite3
+# Django specific
+# media/ # If you have user-uploaded media files
+# staticfiles/ # If you run collectstatic locally before building
+
+# IDE / OS specific
+.vscode/
+.idea/
+*.DS_Store
+# Add other files/dirs to ignore as needed

@@ -1,0 +1,13 @@
+Django>=4.0,<5.0
+# Dependencies from datascraper and data_providers
+sentence-transformers
+faiss-cpu
+numpy
+python-dotenv
+requests
+beautifulsoup4
+googlesearch-python
+openai
+markdown
+# Add gunicorn for production server for Django
+gunicorn

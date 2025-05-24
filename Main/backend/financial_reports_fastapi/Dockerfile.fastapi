@@ -1,0 +1,80 @@
+# --- Base Image ---
+# Use an official Python 3.10 slim-buster image. 'slim' is smaller than the full image.
+FROM python:3.10-slim
+
+# --- Environment Variables ---
+# PYTHONDONTWRITEBYTECODE=1: Prevents Python from writing .pyc files.
+ENV PYTHONDONTWRITEBYTECODE 1
+# PYTHONUNBUFFERED=1: Ensures Python output is sent straight to terminal (important for Docker logs).
+ENV PYTHONUNBUFFERED 1
+
+# --- Working Directory ---
+# Set the working directory inside the container to /app.
+# Subsequent commands will be run from this directory.
+WORKDIR /app
+
+# --- Install Python Dependencies ---
+# Copy the requirements file specific to the FastAPI application.
+# This file is located at Main/backend/financial_reports_fastapi/requirements.txt in the source.
+# It's copied to /app/requirements.txt in the image.
+COPY requirements.txt /app/
+
+# Install dependencies using pip.
+# --no-cache-dir: Reduces image size by not storing the pip download cache.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Copy Application Code ---
+# The Docker build context for this Dockerfile is assumed to be 'Main/backend/'.
+# This means paths in COPY commands are relative to 'Main/backend/'.
+
+# Copy the FastAPI application code itself.
+# Source: Main/backend/financial_reports_fastapi/ (from build context)
+# Destination: /app/ (in the image, which is the current WORKDIR)
+# This will copy main.py, report_generator.py, etc. into /app/
+COPY ./financial_reports_fastapi /app/
+
+# Copy shared modules from the 'Main/backend/' directory into the image.
+# These modules are used by the FastAPI service for its operations.
+# Their destination paths within the image are structured to be importable by the FastAPI app.
+# For example, 'from chart_generator.charting import ...' will work if chart_generator is at /app/chart_generator.
+
+# Source: Main/backend/chart_generator/ (from build context)
+# Destination: /app/chart_generator/ (in the image)
+COPY ./chart_generator /app/chart_generator/
+
+# Source: Main/backend/data_providers/ (from build context)
+# Destination: /app/data_providers/ (in the image)
+COPY ./data_providers /app/data_providers/
+
+# Source: Main/backend/datascraper/ (from build context)
+# Destination: /app/datascraper/ (in the image)
+COPY ./datascraper /app/datascraper/
+
+# Note on Python Imports:
+# The Python code within the FastAPI application (e.g., report_generator.py)
+# uses sys.path modifications or relies on the 'Main/backend/' directory being effectively
+# part of PYTHONPATH to import these shared modules.
+# By copying them into the /app directory alongside the FastAPI app's own code,
+# and if the FastAPI app's sys.path adjustments correctly point to /app or its parent if needed,
+# these modules should be importable.
+# Example: report_generator.py does `sys.path.append(parent_dir)` where parent_dir becomes '/app'
+# if it's importing from /app/datascraper. This structure should work.
+
+# --- Expose Port ---
+# Expose port 8001, which is the port Uvicorn will listen on for the FastAPI application.
+EXPOSE 8001
+
+# --- Command to Run the Application ---
+# Use Uvicorn to run the FastAPI application.
+# "main:app": 'main' refers to main.py (now at /app/main.py), and 'app' is the FastAPI instance within that file.
+# "--host", "0.0.0.0": Makes the server accessible externally (from outside the container).
+# "--port", "8001": Specifies the port Uvicorn should use, matching the EXPOSE instruction.
+# (Optional: Add "--reload" for development, but it's generally not recommended for production images.)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+# --- Build Context Note ---
+# This Dockerfile is intended to be built with the 'Main/backend/' directory as the build context.
+# Example build command (run from 'Main/backend/'):
+# `docker build -f financial_reports_fastapi/Dockerfile.fastapi -t fastapi_service .`
+# The `-f financial_reports_fastapi/Dockerfile.fastapi` specifies this Dockerfile.
+# The `.` at the end sets the build context to the current directory ('Main/backend/').
